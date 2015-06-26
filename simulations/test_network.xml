@@ -1,0 +1,4 @@
+<config>
+    <interface hosts='playbackHost' names='wlan0' address='192.168.8.5' netmask='255.255.255.0'/>
+    <interface hosts='targetHost' names='eth0' address='192.168.8.2' netmask='255.255.255.0'/>
+</config>
