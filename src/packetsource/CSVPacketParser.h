@@ -16,28 +16,25 @@
 // @author Brian Ricks
 //
 
-#ifndef BASICPACKETSOURCE_H_
-#define BASICPACKETSOURCE_H_
-
-#include <list>
-#include <string>
+#ifndef CSVPACKETPARSER_H_
+#define CSVPACKETPARSER_H_
 
 #include "PacketParser.h"
-#include "ScheduledPacketSource.h"
-#include "BasicPacketSourceData_m.h"
 
-// Basic PacketSource which accepts a comma-delim list of data:
-// timestamp, source IP/port, destination IP/port
-class BasicPacketSource: public ScheduledPacketSource {
+class CSVPacketParser: public PacketParser {
 public:
-    virtual ~BasicPacketSource() { delete _parser; }
+    CSVPacketParser() : rowsDisgarded(0) { }
+    virtual void parse(const char *path);  // contract from PacketParser
+
+    // A reference is returned here so it can be used as a WATCH variable.
+    virtual unsigned int& getRowsDisgarded() { return rowsDisgarded; }
 
 protected:
-    virtual void scheduleNext();
-    virtual void initialize();
+    unsigned int rowsDisgarded;
 
-    unsigned int currentDataRowSize; // WATCH variable
-    PacketParser *_parser;
+    virtual void parseData(const char *path);
+    virtual std::string trimString(std::string str);
+
 };
 
-#endif /* BASICPACKETSOURCE_H_ */
+#endif /* CSVPACKETPARSER_H_ */

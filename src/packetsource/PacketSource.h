@@ -33,6 +33,8 @@ class PacketInjector;
 // This allows for the subscriptions to be simpler.
 class PacketSource {
 public:
+    virtual ~PacketSource() = default;
+
     // Adds an injector to the list of injectors receiving packets from this packet source
     virtual bool subscribe(PacketInjector *injector);
 

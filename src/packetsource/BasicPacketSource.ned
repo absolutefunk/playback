@@ -25,6 +25,7 @@ simple BasicPacketSource like IScheduledPacketSource
 {
     parameters:
         string sourceFile = default("TestData.csv");
+        string packetParser = default("CSVPacketParser");
         
         @signal[scheduledPk](type=int);
     	@signal[dispatchedPk](type=int);

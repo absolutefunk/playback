@@ -16,140 +16,81 @@
 // @author Brian Ricks
 //
 
-#include <fstream>
-#include <vector>
-
 #include "BasicPacketSource.h"
+
+#include "CSVPacketParser.h"
 
 Define_Module(BasicPacketSource);
 
 void BasicPacketSource::initialize() {
     ScheduledPacketSource::initialize();  // call this first
 
-    parseData(par("sourceFile").stringValue());  // parse the CSV
-    WATCH(dataSize);
+    // get the parser type and instantiate
+    std::string parserName = par("packetParser").stdstringValue();
+    // TODO:  Lookup valid parsers that match the name instead of just hardcoding it here.  The method
+    // should return a pointer to the correct parser, if it exists, and NULL otherwise.
+    if (parserName.compare("CSVPacketParser") == 0) {
+        _parser = new CSVPacketParser();
+        // TODO: this WATCH variable should be in the base class
+        unsigned int &datasetRowsDisgarded = dynamic_cast<CSVPacketParser *>(_parser)->getRowsDisgarded();
+        WATCH(datasetRowsDisgarded);
+    }
+    else {
+        // if the input PacketParser (from omnetpp.ini / NED) is unrecognized
+        error("Unrecognized PacketParser type: %s", par("packetParser").stringValue());
+    }
 
-    scheduleNext();  // schedule the first pktData
+    // add the fieldsTypes for the contract
+    _parser->addContractField(PacketParserContract::FIELD_TIMESTAMP_MS);    // timestamp (milliseconds)
+    _parser->addContractField(PacketParserContract::FIELD_STRING);          // Src IP
+    _parser->addContractField(PacketParserContract::FIELD_INT);             // Src port
+    _parser->addContractField(PacketParserContract::FIELD_STRING);          // Dst IP
+    _parser->addContractField(PacketParserContract::FIELD_INT);             // Dst port
+    _parser->addContractField(PacketParserContract::FIELD_INT);             // SeqNo
+    _parser->addContractField(PacketParserContract::FIELD_INT);             // Window Size
+
+    // parse the CSV file
+    // Note that this can throw cRuntimeErrors, as the error() convenience method is only available
+    // for cSimpleModules
+    try {
+        _parser->parse(par("sourceFile").stringValue());
+    }
+    catch (cRuntimeError &ex) {
+        error(ex.what());
+    }
+
+    // initial size of the data
+    currentDataRowSize = _parser->getSize();
+    WATCH(currentDataRowSize);
+
+    // schedule the first pktData
+    scheduleNext();
 }
 
 void BasicPacketSource::scheduleNext() {
     // This will keep scheduling the next pktData until the list is empty
-    if(data.size() > 0) {
-        scheduleToDispatch(data.front());
-        data.pop_front();  // remove the pktData ptr we just scheduled
-        --dataSize;
+    if(_parser->getSize() > 0) {
+        // create the message for the subscribed injectors
+        BasicPacketSourceData *pktData = new BasicPacketSourceData("BasicPacketSource");
+        FieldData fields = _parser->pop();
+
+        // cRuntimeErrors can be thrown here
+        try {
+            // Note how the indices match with the ordering of the contract fieldTypes, except the timestamp which is
+            // stored separately.
+            pktData->setTimestamp(fields.getTimestamp());  // timestamp
+            pktData->setSrcAddress(fields.stringValueAt(0).c_str());  // source address
+            pktData->setSrcPort(fields.intValueAt(1));  // source port
+            pktData->setDestAddress(fields.stringValueAt(2).c_str());  // destination address
+            pktData->setDestPort(fields.intValueAt(3));  // destination port
+            pktData->setSeqNo(fields.intValueAt(4));  // sequence number
+            pktData->setWindowSize(fields.intValueAt(5));  // window size
+        }
+        catch (cRuntimeError &ex) {
+            error(ex.what());
+        }
+
+        scheduleToDispatch(pktData);
+        currentDataRowSize = _parser->getSize();  // should be decremented by 1
     }
-}
-
-void BasicPacketSource::finish() {
-    ScheduledPacketSource::finish();
-
-    // we need to delete any cMessage objects we created that havn't been sent out yet.
-    for(std::list<BasicPacketSourceData *>::iterator it = data.begin(); it != data.end(); ++it) {
-        delete *it;
-    }
-}
-
-void BasicPacketSource::parseData(const char *fileName) {
-    std::string delims(",");  // split based on commas
-
-    std::ifstream infile(fileName);
-
-    if (!infile) {
-        // couldn't open the file
-        std::string errMsg = std::string("File: ") + fileName + " failed to open.  Does the file exist?";
-        error(errMsg.c_str());
-    }
-
-    std::string line;
-    std::size_t lineNum = 0;
-
-    // for each line in the CSV
-    while (std::getline(infile, line)) {
-        ++lineNum;
-        std::vector<std::string> tokens;
-
-        std::size_t tokenStart = 0;
-        std::size_t pos;
-        while ((pos = line.find_first_of(delims, tokenStart)) != std::string::npos) {
-            if (tokenStart < pos) {
-                // non-empty token: we assume the data will be complete; no tokens of zero-length
-                tokens.push_back(trimString(line.substr(tokenStart, pos-tokenStart)));
-                //EV << trimString(line.substr(tokenStart, pos-tokenStart)) << ",";
-            }
-            tokenStart = pos + 1;
-        }
-
-        if (tokenStart < line.length()) {
-            // catch the last token
-            tokens.push_back(trimString(line.substr(tokenStart, line.length() - tokenStart)));
-            //EV << trimString(line.substr(tokenStart, line.length() - tokenStart)) << ",";
-        }
-        //EV << "\n";
-
-        // check to make sure the number of tokens equals the expected number
-        if (tokens.size() != TOKEN_NUM) {
-            EV << "[BasicPacketSource]: parsing: number of elements does not match expected number (line "
-                    << lineNum << ").  Token count: " << tokens.size() << ", expected count: " << TOKEN_NUM << ".\n";
-            continue;
-        }
-
-        BasicPacketSourceData *pktData = new BasicPacketSourceData("BasicPacketSourceData");
-        // we want the time in milliseconds, so we need to convert first
-        double tsMilli = std::stod(tokens[0]) / 1000.0;
-        pktData->setTimestamp(SimTime(tsMilli));  // timestamp
-        pktData->setSrcAddress(tokens[1].c_str());  // source address
-        pktData->setSrcPort(std::stoi(tokens[2]));  // source port
-        pktData->setDestAddress(tokens[3].c_str());  // destination address
-        pktData->setDestPort(std::stoi(tokens[4]));  // destination port
-        pktData->setSeqNo(std::stoi(tokens[5]));  // sequence number
-        pktData->setWindowSize(std::stoi(tokens[6]));  // window size
-
-        data.push_back(pktData);
-    }
-
-    dataSize = data.size();
-}
-
-std::string BasicPacketSource::trimString(std::string str) {
-    std::string whitespace("\n\r\t ");
-    std::size_t startPos = 0;
-    std::size_t endPos = str.length();
-
-    //remove from both ends
-    // left side
-    for(std::size_t i = 0; i < str.length(); ++i) {
-        bool isWhitespace = false;
-        for (std::size_t j = 0; j < whitespace.length(); ++j) {
-            if (str[i] == whitespace[j]) {
-                // found whitespace
-                ++startPos;
-                isWhitespace = true;
-                break;
-            }
-        }
-
-        if (!isWhitespace) {
-            break;
-        }
-    }
-
-    // right side
-    for(std::size_t i = str.length() - 1; i > startPos;  --i) {
-        bool isWhitespace = false;
-        for (std::size_t j = 0; j < whitespace.length(); ++j) {
-            if (str[i] == whitespace[j]) {
-                // found whitespace
-                --endPos;
-                isWhitespace = true;
-                break;
-            }
-        }
-
-        if (!isWhitespace) {
-            break;
-        }
-    }
-
-    return str.substr(startPos, endPos - startPos);
 }

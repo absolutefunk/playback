@@ -25,6 +25,9 @@
 // While this is a simple module, it is not meant to be instantiated on its own (hence why there is no Define_Module()
 // or a NED definition for this class).
 class ScheduledPacketSource: public PacketSource, public cSimpleModule {
+public:
+    virtual ~ScheduledPacketSource() = default;
+
 protected:
     virtual void scheduleToDispatch(cMessage *pktData);
     virtual void scheduleNext() = 0;  // this is called after a current packet has been dispatched
