@@ -23,8 +23,6 @@
 
 #include <omnetpp.h>
 
-#include "ModuleAccess.h"
-
 class PacketInjector;
 
 // Base class for all packet sources.  This handles stuff like subscriptions to injectors.
@@ -51,13 +49,6 @@ protected:
     // Dispatches a new packet (data for the injector to generate a packet from) to all the injectors subscribed
     // Returns the number of injectors the input pktData was dispatched to.
     virtual int dispatch(cMessage *pktData);
-};
-
-// class used to retrieve a pointer to the given PacketSource module (by module name)
-// If instantiation is successful, then the getIfExists() method will actually return the pointer.
-class PacketSourceAccess : public ModuleAccess<PacketSource> {
-public:
-    PacketSourceAccess(const char *moduleName) : ModuleAccess<PacketSource>(moduleName) {}
 };
 
 #endif /* PACKETSOURCE_H_ */

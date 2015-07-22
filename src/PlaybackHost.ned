@@ -16,7 +16,7 @@
 package cmu.sv.mews.playback;
 
 import cmu.sv.mews.playback.packetsource.IPacketSource;
-import inet.nodes.inet.StandardHost;
+import inet.node.inet.StandardHost;
 import ned.IdealChannel;
 
 //

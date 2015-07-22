@@ -20,12 +20,22 @@
 
 #include "PacketInjector.h"
 
+#include "ModuleAccess.h"
 #include "PacketSource.h"
 
-void PacketInjector::subscribeToPacketSource(const char *packetSourceName) {
+void PacketInjector::subscribeToPacketSource(cPar &packetSourceName) {
     // subscribe to the PacketSource we need.  Note that the name must match the name of the module when it
     // is instantiated in the NED (for array of modules, append '[index]' to the module name).
-    PacketSource *pktSource = PacketSourceAccess(packetSourceName).getIfExists();
+    // This is changed from INET 2.6.  In INET 3.0, call the function directly, using a cPar (not as flexible
+    // but we can roll with it).
+    PacketSource *pktSource = NULL;
+
+    try {
+        pktSource = inet::getModuleFromPar(packetSourceName, this);
+    }
+    catch(cRuntimeError &ex) {
+        error(ex.what());
+    }
 
     if (!pktSource) {
         std::string errMsg = std::string("PacketSource: ") + packetSourceName +
@@ -41,6 +51,10 @@ void PacketInjector::subscribeToPacketSource(const char *packetSourceName) {
 
     subscriptions.insert(std::pair<std::string, PacketSource *>(std::string(packetSourceName), pktSource));
     subscribedCount = getSubscribedCount();
+}
+
+void PacketInjector::unsubscribeFromPacketSource(cPar &packetSourceName) {
+    unsubscribeFromPacketSource(packetSourceName.stringValue());
 }
 
 void PacketInjector::unsubscribeFromPacketSource(const char *packetSourceName) {

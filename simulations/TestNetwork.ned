@@ -16,11 +16,11 @@
 package cmu.sv.mews.playback.simulations;
 
 import cmu.sv.mews.playback.PlaybackHost;
-import inet.networklayer.autorouting.ipv4.IPv4NetworkConfigurator;
-import inet.nodes.ethernet.Eth100M;
-import inet.nodes.inet.StandardHost;
-import inet.nodes.wireless.AccessPoint;
-import inet.world.radio.ChannelControl;
+import inet.networklayer.configurator.ipv4.IPv4NetworkConfigurator;
+import inet.node.ethernet.Eth100M;
+import inet.node.inet.StandardHost;
+import inet.node.wireless.AccessPoint;
+import inet.physicallayer.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
 
 
 //
@@ -39,7 +39,7 @@ network TestNetwork
             @display("p=388,173");
         }
 
-        channelControl: ChannelControl {
+        channelControl: Ieee80211ScalarRadioMedium {
             @display("p=60,30");
         }
         configurator: IPv4NetworkConfigurator {

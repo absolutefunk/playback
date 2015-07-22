@@ -37,6 +37,7 @@ protected:
     std::map<std::string, PacketSource *> subscriptions;  // list of our current subscriptions
 
     virtual void subscribeToPacketSource(const char *packetSourceName);
+    virtual void unsubscribeFromPacketSource(cPar &packetSourceName);
     virtual void unsubscribeFromPacketSource(const char *packetSourceName);
 };
 
