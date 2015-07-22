@@ -1,3 +1,3 @@
 OMNeT++ Inet Source-based playback of packet streams
 
-TODO: put something interesting here
+This branch is for the INET 3.0 port of the playback framework.
