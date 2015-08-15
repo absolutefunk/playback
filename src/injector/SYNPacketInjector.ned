@@ -23,6 +23,8 @@ import inet.transportlayer.contract.ITCP;
 simple SYNPacketInjector like ITCP
 {
     parameters:
+        string packetSource = default("packetSource[0]");  // PacketSource module to subscribe to
+        
         @display("i=block/departure");
         @signal[sentSYNPk](type=cPacket);
         @statistic[sentSYNPk](title="packets sent"; source=sentSYNPk; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);

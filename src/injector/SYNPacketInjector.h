@@ -22,9 +22,9 @@
 #include "BasicPacketSourceData_m.h"
 #include "PacketInjector.h"
 
-#include "IInterfaceTable.h"
-#include "IPSocket.h"
-#include "TCPSegment.h"
+#include "inet/networklayer/common/IPSocket.h"
+#include "inet/networklayer/contract/IInterfaceTable.h"
+#include "inet/transportlayer/tcp_common/TCPSegment.h"
 
 class SYNPacketInjector: public PacketInjector {
 public:
@@ -32,18 +32,18 @@ public:
 
 protected:
     virtual void initialize(int stage);
-    virtual int numInitStages() const { return 4; }
+    virtual int numInitStages() const { return 16; }
     virtual void handleMessage(cMessage *msg);
 
 private:
-    IInterfaceTable *interfaceTable;
-    IPSocket ipSocket;  // used to register the injector
+    inet::IInterfaceTable *interfaceTable = nullptr;
+    inet::IPSocket ipSocket = nullptr;  // used to register the injector
 
     // statistics
     simsignal_t sentPkSignal;
 
-    TCPSegment* generateSyn(BasicPacketSourceData *pktData);  // generates a SYN packet
-    void sendSyn(TCPSegment *synPkt, BasicPacketSourceData *pktData);  // sends out a SYN packet
+    inet::tcp::TCPSegment* generateSyn(BasicPacketSourceData *pktData);  // generates a SYN packet
+    void sendSyn(inet::tcp::TCPSegment *synPkt, BasicPacketSourceData *pktData);  // sends out a SYN packet
 };
 
 #endif /* SYNPACKETINJECTOR_H_ */

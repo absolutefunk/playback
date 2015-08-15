@@ -18,10 +18,12 @@
 
 #include "SYNPacketInjector.h"
 
-#include "InterfaceTableAccess.h"
-#include "IPv4Address.h"
-#include "IPv4ControlInfo.h"
-#include "IPv4InterfaceData.h"
+#include "inet/networklayer/common/L3Address.h"
+#include "inet/networklayer/common/L3AddressResolver.h"
+#include "inet/networklayer/contract/IL3AddressType.h"
+#include "inet/networklayer/contract/INetworkProtocolControlInfo.h"
+#include "inet/networklayer/contract/ipv4/IPv4Address.h"
+#include "inet/networklayer/ipv4/IPv4InterfaceData.h"
 
 Define_Module(SYNPacketInjector);
 
@@ -30,7 +32,11 @@ void SYNPacketInjector::initialize(int stage) {
         // Get the InterfaceTable for the host we are a part of.  This is needed to subvert the network layer
         // source address checks.  Since all we are doing is injecting packets, it is not our job to check
         // validity of the pktData itself (though other injectors may require these checks).
-        interfaceTable = InterfaceTableAccess().getIfExists();
+        interfaceTable = dynamic_cast<inet::IInterfaceTable *>(getModuleByPath("^.interfaceTable"));
+
+        if(!interfaceTable) {
+            error("SYNPacketInjector: Could not find the interfaceTable module!");
+        }
 
         // register signals
         sentPkSignal = registerSignal("sentSYNPk");
@@ -39,23 +45,28 @@ void SYNPacketInjector::initialize(int stage) {
     }
     else if (stage == 1) {
         // gives the PacketSources a chance to initialize stuff at stage 0
-        subscribeToPacketSource("packetSource[0]");
+        subscribeToPacketSource(par("packetSource"));  // INET3 change: passing cPar directly due to ModuleAccess structure changing
 
         // currently only IPv4 supported
         ipSocket.setOutputGate(gate("ipOut"));  // assign our IPv4 out gate
-        ipSocket.registerProtocol(IP_PROT_TCP);  // register our protocol on the appropriate gate to the network layer
+        ipSocket.registerProtocol(inet::IP_PROT_TCP);  // register our protocol on the appropriate gate to the network layer
     }
-    else if (stage == 3) {
+    else if (stage == 15) {
         // Add a fake interface if using IPv4.  This is needed if the src address does not match the one on the interface
         // We do this in stage 3 to make sure we aren't conflicting with any autoconfigurators which may throw
         // exceptions in the presence of this fake interface :-)
         // 1337 h4x0r m0d3
-        InterfaceEntry *fakeInterface = new InterfaceEntry(NULL);
+
+        // INET3: The autoconfigurator now configures nodes at the 14th stage.  So thus we need to do this
+        // at the 15th stage...
+
+        // TODO: don't assume using IPv4
+        inet::InterfaceEntry *fakeInterface = new inet::InterfaceEntry(this);
         fakeInterface->setName("fk0");
         fakeInterface->setLoopback(true);  // We don't want other protocols to think this is a public interface
 
-        IPv4InterfaceData *ipv4Data = new IPv4InterfaceData();
-        ipv4Data->setIPAddress(IPv4Address());
+        inet::IPv4InterfaceData *ipv4Data = new inet::IPv4InterfaceData();
+        ipv4Data->setIPAddress(inet::IPv4Address());
         fakeInterface->setIPv4Data(ipv4Data);
 
         interfaceTable->addInterface(fakeInterface);
@@ -81,8 +92,8 @@ void SYNPacketInjector::handleMessage(cMessage *msg) {
     delete msg;
 }
 
-TCPSegment* SYNPacketInjector::generateSyn(BasicPacketSourceData *pktData) {
-    TCPSegment *synPkt = new TCPSegment("SYNPacketInjector");
+inet::tcp::TCPSegment* SYNPacketInjector::generateSyn(BasicPacketSourceData *pktData) {
+    inet::tcp::TCPSegment *synPkt = new inet::tcp::TCPSegment("SYNPacketInjector");
 
     // SYN PDU config
     // The default instantiation clears all flags, and sets the header length to no options.
@@ -98,19 +109,30 @@ TCPSegment* SYNPacketInjector::generateSyn(BasicPacketSourceData *pktData) {
     return synPkt;
 }
 
-void SYNPacketInjector::sendSyn(TCPSegment *synPkt, BasicPacketSourceData *pktData) {
+void SYNPacketInjector::sendSyn(inet::tcp::TCPSegment *synPkt, BasicPacketSourceData *pktData) {
     EV << "[SYNPacketInjector]: Preparing to inject a new SYN packet...\n";
 
-    IPv4ControlInfo *controlInfo = new IPv4ControlInfo();
-    controlInfo->setProtocol(IP_PROT_TCP);
-    controlInfo->setSrcAddr(IPv4Address(pktData->getSrcAddress()));
+    // The second param, addrType, is not used since the correct IP protocol is resolved
+    // before the addrType is needed (hence just stick a -1 here).
+    inet::L3Address srcAddr = inet::L3AddressResolver().resolve(pktData->getSrcAddress(), -1);
+    inet::L3Address destAddr = inet::L3AddressResolver().resolve(pktData->getDestAddress(), -1);
+
+    // INET3: generalized IP address types
+    inet::IL3AddressType *addressType = destAddr.getAddressType();
+    inet::INetworkProtocolControlInfo *controlInfo = addressType->createNetworkProtocolControlInfo();
+
+    controlInfo->setTransportProtocol(inet::IP_PROT_TCP);
+    controlInfo->setSourceAddress(srcAddr);
+
     // The IPv4 network layer checks for valid source addresses and throws an exception if no interface is assigned
     // to a source address given.  So to avoid hacking the IP protocol, change the fake interface address to the one
     // we just generated.
-    interfaceTable->getInterfaceByName("fk0")->ipv4Data()->setIPAddress(controlInfo->getSrcAddr());
+    interfaceTable->getInterfaceByName("fk0")->ipv4Data()->setIPAddress(controlInfo->getSourceAddress().toIPv4());
 
-    controlInfo->setDestAddr(IPv4Address(pktData->getDestAddress()));
-    synPkt->setControlInfo(controlInfo);
+    controlInfo->setDestinationAddress(destAddr);
+    // INET3: INetworkProtocolControlInfo does not inherent cObject, but whichever derived class
+    // we actually pass here does.
+    synPkt->setControlInfo(check_and_cast<cObject *>(controlInfo));
 
     send(synPkt, "ipOut");
 

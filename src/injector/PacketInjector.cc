@@ -16,22 +16,27 @@
 // @author Brian Ricks
 //
 
+#include <string>
 #include <utility>
 
 #include "PacketInjector.h"
 
-#include "ModuleAccess.h"
 #include "PacketSource.h"
 
 void PacketInjector::subscribeToPacketSource(cPar &packetSourceName) {
-    // subscribe to the PacketSource we need.  Note that the name must match the name of the module when it
-    // is instantiated in the NED (for array of modules, append '[index]' to the module name).
-    // This is changed from INET 2.6.  In INET 3.0, call the function directly, using a cPar (not as flexible
-    // but we can roll with it).
+    subscribeToPacketSource(packetSourceName.stringValue());
+}
+
+void PacketInjector::subscribeToPacketSource(const char *packetSourceName) {
+
     PacketSource *pktSource = NULL;
 
+    // prepend the path search criteria to the packetSourceName
+    std::string modPath("^.");
+    modPath.append(packetSourceName);
+
     try {
-        pktSource = inet::getModuleFromPar(packetSourceName, this);
+        pktSource = dynamic_cast<PacketSource *>(getModuleByPath(modPath.c_str()));
     }
     catch(cRuntimeError &ex) {
         error(ex.what());
