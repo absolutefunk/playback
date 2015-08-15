@@ -32,6 +32,8 @@ void PacketInjector::subscribeToPacketSource(const char *packetSourceName) {
     PacketSource *pktSource = NULL;
 
     // prepend the path search criteria to the packetSourceName
+    //TODO: Maybe follow the inet standard and put the path directly into the NED instead of
+    // concatenating it here
     std::string modPath("^.");
     modPath.append(packetSourceName);
 
