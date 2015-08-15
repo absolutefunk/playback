@@ -39,7 +39,7 @@ network TestNetwork
             @display("p=388,173");
         }
 
-        channelControl: Ieee80211ScalarRadioMedium {
+        radioMedium: Ieee80211ScalarRadioMedium {
             @display("p=60,30");
         }
         configurator: IPv4NetworkConfigurator {
